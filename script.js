@@ -1,42 +1,59 @@
-const BACKEND_URL = "https://testbackend-ouw8.onrender.com/";  // Replace with your actual Render URL
+const BACKEND_URL = "https://testbackend-ouw8.onrender.com/"; // Replace with your backend URL
 
-// DevTools detection based on viewport size difference
-(function detectDevTools() {
-  const threshold = 160; // pixels difference threshold
+(function() {
   let devtoolsOpen = false;
+  let rafLastTime = performance.now();
 
-  setInterval(() => {
-    if (
-      window.outerWidth - window.innerWidth > threshold ||
-      window.outerHeight - window.innerHeight > threshold
-    ) {
+  // 1. Console getter detection
+  function checkConsole() {
+    const devtools = {};
+    Object.defineProperty(devtools, 'id', {
+      get: function() {
+        devtoolsOpen = true;
+        return true;
+      }
+    });
+    console.log(devtools);
+  }
+
+  // 2. Debugger statement timing detection
+  function checkDebuggerTiming() {
+    const start = performance.now();
+    debugger;
+    const end = performance.now();
+    if (end - start > 100) {
       devtoolsOpen = true;
     }
+  }
+
+  // 3. requestAnimationFrame timing detection
+  function checkRafTiming() {
+    requestAnimationFrame(() => {
+      const now = performance.now();
+      if (now - rafLastTime > 200) {
+        devtoolsOpen = true;
+      }
+      rafLastTime = now;
+      checkRafTiming();
+    });
+  }
+
+  // Run checks repeatedly
+  function detect() {
+    devtoolsOpen = false;
+
+    checkConsole();
+    checkDebuggerTiming();
 
     if (devtoolsOpen) {
       window.location.href = "/404.html";
     }
-  }, 1000);
+  }
+
+  // Start RAF timing loop
+  checkRafTiming();
+
+  // Run detect every second
+  setInterval(detect, 1000);
+
 })();
-
-// Check internet connection and ping backend
-async function checkConnection() {
-  if (!navigator.onLine) {
-    window.location.href = "/404.html";
-    return;
-  }
-
-  try {
-    const response = await fetch(`${BACKEND_URL}/ping`);
-    const data = await response.json();
-
-    if (!data.status || data.status !== "ok") {
-      window.location.href = "/404.html";
-    }
-  } catch (error) {
-    window.location.href = "/404.html";
-  }
-}
-
-window.addEventListener("offline", checkConnection);
-setInterval(checkConnection, 5000);
