@@ -1,59 +1,108 @@
-const BACKEND_URL = "https://testbackend-ouw8.onrender.com/"; // Replace with your backend URL
+const BACKEND_URL = "https://testbackend-ouw8.onrender.com/"; // Change to your backend URL
 
 (function() {
-  let devtoolsOpen = false;
-  let rafLastTime = performance.now();
+  let devtoolsSuspected = false;
 
-  // 1. Console getter detection
-  function checkConsole() {
-    const devtools = {};
-    Object.defineProperty(devtools, 'id', {
-      get: function() {
-        devtoolsOpen = true;
-        return true;
-      }
-    });
-    console.log(devtools);
+  async function reportToBackend(trigger) {
+    try {
+      await fetch(`${BACKEND_URL}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          trigger,
+          fingerprint: {
+            userAgent: navigator.userAgent,
+            screen: `${window.screen.width}x${window.screen.height}`,
+            timestamp: Date.now(),
+          }
+        })
+      });
+    } catch (e) {
+      console.warn("Reporting failed:", e);
+    }
   }
 
-  // 2. Debugger statement timing detection
-  function checkDebuggerTiming() {
+  function checkDimensions() {
+    if (Math.abs(window.outerWidth - window.innerWidth) > 160 ||
+        Math.abs(window.outerHeight - window.innerHeight) > 160) {
+      devtoolsSuspected = true;
+      reportToBackend("dimension_mismatch");
+    }
+  }
+
+  function debuggerTrap() {
     const start = performance.now();
     debugger;
-    const end = performance.now();
-    if (end - start > 100) {
-      devtoolsOpen = true;
+    if (performance.now() - start > 50) {
+      devtoolsSuspected = true;
+      reportToBackend("debugger_pause");
     }
   }
 
-  // 3. requestAnimationFrame timing detection
-  function checkRafTiming() {
-    requestAnimationFrame(() => {
-      const now = performance.now();
-      if (now - rafLastTime > 200) {
-        devtoolsOpen = true;
+  function consoleTrap() {
+    const element = new Image();
+    Object.defineProperty(element, 'id', {
+      get: function() {
+        devtoolsSuspected = true;
+        reportToBackend("console_opened");
       }
-      rafLastTime = now;
-      checkRafTiming();
     });
+    console.log(element);
   }
 
-  // Run checks repeatedly
-  function detect() {
-    devtoolsOpen = false;
-
-    checkConsole();
-    checkDebuggerTiming();
-
-    if (devtoolsOpen) {
-      window.location.href = "/404.html";
+  async function wasmDelayCheck() {
+    try {
+      const wasmModule = await WebAssembly.compile(
+        new Uint8Array([0x00,0x61,0x73,0x6d,0x01,0x00,0x00,0x00,
+          0x01,0x05,0x01,0x60,0x00,0x01,0x7f,
+          0x03,0x02,0x01,0x00,
+          0x07,0x05,0x01,0x01,0x66,0x00,0x00,
+          0x0a,0x07,0x01,0x05,0x00,0x41,0x2a,0x0f,0x0b])
+      );
+      const instance = await WebAssembly.instantiate(wasmModule);
+      const start = performance.now();
+      instance.exports.f();
+      if (performance.now() - start > 50) {
+        devtoolsSuspected = true;
+        reportToBackend("wasm_delay");
+      }
+    } catch {
+      devtoolsSuspected = true;
+      reportToBackend("wasm_error");
     }
   }
 
-  // Start RAF timing loop
-  checkRafTiming();
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "F12" ||
+      (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "i") ||
+      (e.metaKey && e.altKey && e.key.toLowerCase() === "i")
+    ) {
+      devtoolsSuspected = true;
+      reportToBackend("devtools_shortcut");
+    }
+  });
 
-  // Run detect every second
-  setInterval(detect, 1000);
+  function functionTamperCheck() {
+    if (Function.prototype.toString.toString().length !== 33) {
+      devtoolsSuspected = true;
+      reportToBackend("function_tamper");
+    }
+  }
 
+  setInterval(() => {
+    checkDimensions();
+    debuggerTrap();
+    consoleTrap();
+    wasmDelayCheck();
+    functionTamperCheck();
+
+    if (devtoolsSuspected) {
+      fetch(`${BACKEND_URL}/verify`, { credentials: "include" })
+        .then(res => {
+          if (res.status === 403) window.location.href = "/blocked.html";
+        });
+    }
+  }, 2000);
 })();
