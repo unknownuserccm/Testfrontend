@@ -39,4 +39,4 @@ async function checkConnection() {
 }
 
 window.addEventListener("offline", checkConnection);
-setInterval(checkConnection, 1000);
+setInterval(checkConnection, 5000);
