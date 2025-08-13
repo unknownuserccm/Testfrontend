@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Secure Login</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      text-align: center; 
+      margin-top: 100px;
+      background: #f2f2f2;
+    }
+    .login-box {
+      display: inline-block;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin-top: 10px;
+      width: 100%;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h1>Enter Password</h1>
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+  </div>
+
+  <script>
+    async function login() {
+      const password = document.getElementById("password").value;
+
+      const res = await fetch("https://testbackend-ouw8.onrender.com/check-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      });
+
+      if (res.ok) {
+        const html = await res.text();
+        document.open();
+        document.write(html);
+        document.close();
+      } else {
+        alert("Incorrect password");
+      }
+    }
+  </script>
+</body>
+</html>
